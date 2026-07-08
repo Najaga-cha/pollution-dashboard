@@ -444,7 +444,10 @@ footer a{text-decoration:underline; text-underline-offset:2px;}
 
           <div class="gsheet-refresh-row" id="gsheetActiveSource" hidden>
             <span id="gsheetActiveLabel">—</span>
-            <button id="gsheetRefresh">รีเฟรชข้อมูล</button>
+            <span style="display:flex; gap:10px;">
+              <button id="gsheetRefresh">รีเฟรชข้อมูล</button>
+              <button id="gsheetDisconnect" title="เลิกจำลิงก์นี้ (จะไม่เชื่อมต่ออัตโนมัติอีก)">เลิกเชื่อมต่อ</button>
+            </span>
           </div>
 
           <div class="gsheet-step">
@@ -604,7 +607,11 @@ footer a{text-decoration:underline; text-underline-offset:2px;}
     <div class="section-title"><span class="num">03</span> แผนที่แหล่งกำเนิดมลพิษ</div>
     <div class="map-card">
       <div class="map-head">
-        <p class="hint" style="margin:0; font-size:12px; color:var(--ink-faint);">จุดสีเขียว = ปฏิบัติตามกฎหมาย · จุดสีส้ม = ไม่ปฏิบัติตามกฎหมาย (คลิกที่จุดเพื่อดูรายละเอียด)</p>
+        <p class="hint" style="margin:0; font-size:12px; color:var(--ink-faint);">จุดสีเขียว = ปฏิบัติตามกฎหมาย · จุดสีส้ม = ไม่ปฏิบัติตามกฎหมาย (คลิกที่จุดเพื่อดูรายละเอียด · เลื่อนล้อเมาส์เพื่อซูม)</p>
+        <button class="btn" id="mapResetBtn" style="flex-shrink:0;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"/><path d="M3 16v-4h4"/></svg>
+          รีเซ็ตมุมมอง
+        </button>
       </div>
       <div id="map"></div>
       <div class="map-legend">
@@ -626,10 +633,25 @@ footer a{text-decoration:underline; text-underline-offset:2px;}
             <p>วิเคราะห์ข้อมูลตามตัวกรองที่เลือกอยู่ในขณะนี้ พร้อมข้อเสนอแนะเชิงนโยบาย</p>
           </div>
         </div>
-        <button class="btn primary" id="aiBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
-          สรุปข้อมูลด้วย AI
-        </button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn" id="aiSettingsToggle" title="ตั้งค่า AI (สำหรับใช้งานนอก Claude.ai)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          </button>
+          <button class="btn primary" id="aiBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
+            สรุปข้อมูลด้วย AI
+          </button>
+        </div>
+      </div>
+      <div class="ai-settings" id="aiSettingsPanel" hidden style="margin-top:14px; background:var(--bg-sunken); border:1px solid var(--line); border-radius:10px; padding:14px 16px; font-size:12px; color:var(--ink-soft); line-height:1.7;">
+        <b style="color:var(--ink);">ทำไมบางครั้งสรุป AI ใช้ไม่ได้?</b> ปุ่มนี้เรียกใช้ Claude โดยตรง ซึ่งทำงานได้ทันทีแบบไม่ต้องตั้งค่าเมื่อเปิดไฟล์นี้ <b>ภายใน Claude.ai</b> (เช่นหน้าต่างตัวอย่างไฟล์) แต่เมื่อ<b>ดาวน์โหลดไฟล์มาเปิดเอง</b>หรือนำไปโฮสต์ที่อื่น จะไม่มีสิทธิ์เรียก API โดยอัตโนมัติ (ขึ้น "Failed to fetch")<br><br>
+        วิธีแก้สำหรับการใช้งานนอก Claude.ai: ใส่ Anthropic API key ของคุณเอง (สร้างได้ที่ <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>) คีย์จะถูกเก็บไว้ในเบราว์เซอร์นี้เท่านั้น (localStorage) และถูกส่งตรงจากเบราว์เซอร์ไปยัง Anthropic โดยไม่ผ่านเซิร์ฟเวอร์อื่น — <b>อย่าใช้คีย์นี้บนเครื่องสาธารณะ/ที่ใช้ร่วมกับผู้อื่น</b> เพราะใครก็ตามที่เปิด DevTools ของเบราว์เซอร์นี้จะเห็นคีย์ได้
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <input type="password" id="aiApiKeyInput" placeholder="sk-ant-..." style="flex:1; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg-elev); color:var(--ink); font-size:12.5px;">
+          <button class="btn" id="aiApiKeySave">บันทึกคีย์</button>
+          <button class="btn" id="aiApiKeyClear">ลบคีย์</button>
+        </div>
+        <div id="aiApiKeyStatus" style="margin-top:8px; color:var(--ink-faint);"></div>
       </div>
       <div class="ai-body" id="aiBody">
         <div class="ai-placeholder">กดปุ่ม "สรุปข้อมูลด้วย AI" เพื่อให้ผู้ช่วยวิเคราะห์ข้อมูลตามตัวกรองปัจจุบัน และอธิบายภาพรวมเป็นภาษาที่เข้าใจง่าย</div>
@@ -702,6 +724,26 @@ let sortState = { key: 'n', dir: 1 };
 let currentPage = 1;
 const PAGE_SIZE = 25;
 let lastUpdatedLabel = '';
+
+/* ---------------- Persistent storage helper ----------------
+   Tries Claude.ai's window.storage (works when this file is opened inside
+   Claude.ai as an artifact) and falls back to the browser's localStorage
+   (works when this file is downloaded and opened/hosted on its own —
+   which is when window.storage is not injected). Every call is wrapped
+   so a missing/broken storage backend never breaks the dashboard. */
+async function storageSet(key, value){
+  try{ if (window.storage){ await window.storage.set(key, value, false); return; } }catch(e){}
+  try{ localStorage.setItem('psd_'+key, value); }catch(e){}
+}
+async function storageGet(key){
+  try{ if (window.storage){ const r = await window.storage.get(key); return (r && r.value != null) ? r.value : null; } }catch(e){}
+  try{ return localStorage.getItem('psd_'+key); }catch(e){}
+  return null;
+}
+async function storageDelete(key){
+  try{ if (window.storage){ await window.storage.delete(key, false); } }catch(e){}
+  try{ localStorage.removeItem('psd_'+key); }catch(e){}
+}
 
 /* ---------------- Library resilience helpers ----------------
    Chart.js / Leaflet / XLSX are loaded from a CDN via <script> tags.
@@ -1123,11 +1165,15 @@ function renderCharts(){
 function refreshChartThemeColors(){ if(FILTERED.length || ALL.length) renderChartsSafe(); }
 
 /* ---------------- Map ---------------- */
+const MAP_DEFAULT_CENTER = [13.75, 100.55];
+const MAP_DEFAULT_ZOOM = 6;
 function initMap(){
-  mapInstance = L.map('map', { scrollWheelZoom:false }).setView([13.75, 100.55], 6);
+  mapInstance = L.map('map', { scrollWheelZoom:true }).setView(MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom:18, attribution:'© OpenStreetMap contributors'
   }).addTo(mapInstance);
+  const resetBtn = document.getElementById('mapResetBtn');
+  if (resetBtn) resetBtn.addEventListener('click', () => mapInstance.setView(MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM));
   markerLayer = L.markerClusterGroup({ maxClusterRadius:45, spiderfyOnMaxZoom:true });
   mapInstance.addLayer(markerLayer);
 }
@@ -1270,13 +1316,8 @@ function mdToHtml(text){
   return html;
 }
 
-async function runAiSummary(){
-  const btn = document.getElementById('aiBtn');
-  const body = document.getElementById('aiBody');
-  btn.disabled = true;
-  body.innerHTML = `<div class="dot-flashing"><span></span><span></span><span></span></div> กำลังวิเคราะห์ข้อมูล...`;
-  const stats = buildStatsSnapshot();
-  const prompt = `คุณคือนักวิเคราะห์นโยบายสิ่งแวดล้อม ช่วยสรุปข้อมูลการตรวจสอบแหล่งกำเนิดมลพิษ (สถิติสรุปด้านล่าง เป็น JSON ที่คำนวณจากข้อมูลจริงตามตัวกรองที่ผู้ใช้เลือกในแดชบอร์ด) เป็นภาษาไทย กระชับ อ่านง่าย โดยใช้หัวข้อย่อยดังนี้ (ใช้ ## นำหน้าหัวข้อ และ - นำหน้าประเด็นย่อย):
+function buildAiPrompt(stats){
+  return `คุณคือนักวิเคราะห์นโยบายสิ่งแวดล้อม ช่วยสรุปข้อมูลการตรวจสอบแหล่งกำเนิดมลพิษ (สถิติสรุปด้านล่าง เป็น JSON ที่คำนวณจากข้อมูลจริงตามตัวกรองที่ผู้ใช้เลือกในแดชบอร์ด) เป็นภาษาไทย กระชับ อ่านง่าย โดยใช้หัวข้อย่อยดังนี้ (ใช้ ## นำหน้าหัวข้อ และ - นำหน้าประเด็นย่อย):
 ## ภาพรวม
 ## จุดที่ควรเฝ้าระวัง
 ## ข้อเสนอแนะเชิงนโยบาย
@@ -1285,27 +1326,103 @@ async function runAiSummary(){
 
 ข้อมูลสถิติ:
 ${JSON.stringify(stats)}`;
+}
+
+// Attempt 1: call Anthropic directly with no key. This only succeeds when the
+// file is being viewed inside Claude.ai's own artifact preview, which proxies
+// and authenticates the request automatically.
+async function callAiNoKey(prompt){
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role:"user", content:prompt }] })
+  });
+  if (!response.ok) throw new Error('no-proxy');
+  const data = await response.json();
+  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  if (!text) throw new Error('no-proxy');
+  return text;
+}
+
+// Attempt 2: call Anthropic with the user's own API key, sent directly from
+// the browser. Used when this file is downloaded/self-hosted outside Claude.ai.
+async function callAiWithKey(prompt, apiKey){
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role:"user", content:prompt }] })
+  });
+  if (!response.ok){
+    const detail = await response.text().catch(()=> '');
+    throw new Error('เรียก API ด้วยคีย์ที่ตั้งค่าไว้ไม่สำเร็จ (HTTP ' + response.status + ') ตรวจสอบว่าคีย์ยังใช้งานได้และมีเครดิตเหลืออยู่ — ' + detail.slice(0,160));
+  }
+  const data = await response.json();
+  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  if (!text) throw new Error('AI ไม่ได้ส่งข้อความกลับมา');
+  return text;
+}
+
+async function runAiSummary(){
+  const btn = document.getElementById('aiBtn');
+  const body = document.getElementById('aiBody');
+  btn.disabled = true;
+  body.classList.add('has-content');
+  body.innerHTML = `<div class="dot-flashing"><span></span><span></span><span></span></div> กำลังวิเคราะห์ข้อมูล...`;
+  const stats = buildStatsSnapshot();
+  const prompt = buildAiPrompt(stats);
 
   try{
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }],
-      })
-    });
-    if (!response.ok) throw new Error('API error ' + response.status);
-    const data = await response.json();
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
-    if (!text) throw new Error('no text');
+    let text;
+    try{
+      text = await callAiNoKey(prompt);
+    } catch(firstErr){
+      const apiKey = await storageGet('anthropic_api_key');
+      if (apiKey){
+        text = await callAiWithKey(prompt, apiKey);
+      } else {
+        throw new Error(
+          'เรียกใช้ AI โดยตรงไม่สำเร็จ — ฟีเจอร์นี้ทำงานอัตโนมัติเมื่อเปิดไฟล์นี้ภายใน Claude.ai เท่านั้น ' +
+          'หากเปิดไฟล์นี้แบบดาวน์โหลด/โฮสต์เอง ให้กดไอคอนรูปเฟือง (⚙) ข้างปุ่ม "สรุปข้อมูลด้วย AI" เพื่อใส่ Anthropic API key ของคุณเอง'
+        );
+      }
+    }
     body.innerHTML = `<div class="ai-output">${mdToHtml(text)}</div>`;
   } catch(err){
-    body.innerHTML = `<div class="ai-placeholder">ไม่สามารถเรียกใช้ผู้ช่วย AI ได้ในขณะนี้ (${escapeHtml(err.message||'unknown error')}) ลองกดปุ่มอีกครั้ง หรือตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</div>`;
+    body.innerHTML = `<div class="ai-placeholder" style="text-align:left; border-color:var(--warn);">${escapeHtml(err.message||'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ')}</div>`;
   } finally {
     btn.disabled = false;
   }
+}
+
+/* ---------------- AI settings (API key for standalone use) ---------------- */
+function initAiSettings(){
+  const toggle = document.getElementById('aiSettingsToggle');
+  const panel = document.getElementById('aiSettingsPanel');
+  const input = document.getElementById('aiApiKeyInput');
+  const status = document.getElementById('aiApiKeyStatus');
+  toggle.addEventListener('click', async ()=>{
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden){
+      const existing = await storageGet('anthropic_api_key');
+      status.textContent = existing ? 'มีการตั้งค่าคีย์ไว้แล้ว (ซ่อนไว้เพื่อความปลอดภัย)' : 'ยังไม่ได้ตั้งค่าคีย์';
+    }
+  });
+  document.getElementById('aiApiKeySave').addEventListener('click', async ()=>{
+    const val = input.value.trim();
+    if (!val){ status.textContent = 'กรุณาวางคีย์ก่อนกดบันทึก'; return; }
+    await storageSet('anthropic_api_key', val);
+    input.value = '';
+    status.textContent = 'บันทึกคีย์แล้ว ลองกด "สรุปข้อมูลด้วย AI" อีกครั้ง';
+  });
+  document.getElementById('aiApiKeyClear').addEventListener('click', async ()=>{
+    await storageDelete('anthropic_api_key');
+    status.textContent = 'ลบคีย์แล้ว';
+  });
 }
 
 /* ---------------- Advanced filter toggle ---------------- */
@@ -1377,21 +1494,34 @@ async function fetchPublicSheetRows(url){
   const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null});
   return json.map(o => mapUploadedRow(o)).filter(Boolean);
 }
-async function loadFromPublicSheet(url, isRefresh){
+const SHEET_AUTO_REFRESH_MS = 120000; // 2 minutes
+let sheetAutoRefreshTimer = null;
+
+function scheduleSheetAutoRefresh(){
+  if (sheetAutoRefreshTimer) clearInterval(sheetAutoRefreshTimer);
+  sheetAutoRefreshTimer = setInterval(()=>{
+    if (lastSource && lastSource.type === 'sheet') loadFromPublicSheet(lastSource.url, true);
+  }, SHEET_AUTO_REFRESH_MS);
+}
+
+async function loadFromPublicSheet(url, isRefresh, skipPersist){
   const loadBtn = document.getElementById('gsheetLoad');
-  loadBtn.disabled = true;
-  setGsheetMsg('กำลังดึงข้อมูลจาก Google Sheet...', '');
+  if (loadBtn) loadBtn.disabled = true;
+  setGsheetMsg(isRefresh ? 'กำลังซิงก์ข้อมูลล่าสุด...' : 'กำลังดึงข้อมูลจาก Google Sheet...', '');
   try{
     const rows = await fetchPublicSheetRows(url);
     if (!rows.length){ setGsheetMsg('ดึงข้อมูลสำเร็จ แต่ไม่พบแถวที่ตรงกับรูปแบบคอลัมน์ที่คาดไว้', 'err'); return; }
     finishLoad(rows, 'Google Sheet (ลิงก์สาธารณะ)');
     lastSource = { type:'sheet', url };
-    showActiveSourceRow('แหล่งข้อมูล: ลิงก์ Google Sheet สาธารณะ');
-    if (!isRefresh) setGsheetMsg('เชื่อมต่อสำเร็จ โหลดข้อมูล ' + rows.length.toLocaleString('th-TH') + ' รายการ', 'ok');
+    showActiveSourceRow('แหล่งข้อมูล: ลิงก์ Google Sheet สาธารณะ · ซิงก์อัตโนมัติทุก 2 นาที');
+    const stamp = new Date().toLocaleTimeString('th-TH');
+    setGsheetMsg((isRefresh ? 'ซิงก์อัตโนมัติล่าสุดเมื่อ ' : 'เชื่อมต่อสำเร็จ โหลดข้อมูล ' + rows.length.toLocaleString('th-TH') + ' รายการ เมื่อ ') + stamp, 'ok');
+    if (!skipPersist) await storageSet('gsheet_url', url);
+    scheduleSheetAutoRefresh();
   } catch(err){
     setGsheetMsg(err.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ', 'err');
   } finally {
-    loadBtn.disabled = false;
+    if (loadBtn) loadBtn.disabled = false;
   }
 }
 
@@ -1536,6 +1666,25 @@ function initGSheet(){
     loadFromPublicSheet(url, false);
   });
   document.getElementById('gsheetRefresh').addEventListener('click', refreshLastSource);
+  document.getElementById('gsheetDisconnect').addEventListener('click', async ()=>{
+    if (sheetAutoRefreshTimer) clearInterval(sheetAutoRefreshTimer);
+    lastSource = null;
+    await storageDelete('gsheet_url');
+    document.getElementById('gsheetActiveSource').hidden = true;
+    document.getElementById('gsheetUrl').value = '';
+    setGsheetMsg('เลิกจำลิงก์แล้ว จะไม่เชื่อมต่ออัตโนมัติในครั้งถัดไป', 'ok');
+  });
+}
+
+// Auto-reconnect on load: if a Google Sheet link was saved from a previous
+// visit (via window.storage inside Claude.ai, or localStorage when this
+// file is downloaded/self-hosted), reconnect silently without asking again.
+async function tryAutoReconnectSheet(){
+  const savedUrl = await storageGet('gsheet_url');
+  if (!savedUrl) return;
+  const urlInput = document.getElementById('gsheetUrl');
+  if (urlInput) urlInput.value = savedUrl;
+  await loadFromPublicSheet(savedUrl, false, true);
 }
 
 /* ---------------- Upload new data (fallback) ---------------- */
@@ -1603,7 +1752,10 @@ function init(){
   document.getElementById('aiBtn').addEventListener('click', runAiSummary);
   initGSheet();
   initUpload();
+  initAiSettings();
   loadData(EMBEDDED_DATA, 'ไฟล์ต้นฉบับที่ฝังในแดชบอร์ด (บันทึกล่าสุด 7 ก.ค. 2569) · ' + EMBEDDED_DATA.rows.length.toLocaleString('th-TH') + ' รายการ');
+  // Reconnect to a previously-connected Google Sheet automatically, if any.
+  tryAutoReconnectSheet();
 }
 
 document.addEventListener('DOMContentLoaded', init);
