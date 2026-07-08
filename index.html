@@ -703,6 +703,49 @@ let currentPage = 1;
 const PAGE_SIZE = 25;
 let lastUpdatedLabel = '';
 
+/* ---------------- Library resilience helpers ----------------
+   Chart.js / Leaflet / XLSX are loaded from a CDN via <script> tags.
+   If the CDN is blocked or slow (offline preview, restrictive network,
+   file:// usage, etc.) those globals may be missing. Previously this
+   caused an uncaught "Chart is not defined" ReferenceError that aborted
+   renderAll() partway through (charts/map/table never drew) and, when
+   triggered from the Google Drive/Sheet import flow, surfaced as a raw
+   "Chart is not defined" message in the connect panel. These helpers
+   detect the missing library, try a fallback CDN once, and otherwise
+   fail soft with a visible, human-readable notice instead of throwing. */
+const LIB_FALLBACK_CDNS = {
+  Chart: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+  L: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js',
+  XLSX: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+};
+const libLoadPromises = {};
+function loadFallbackScript(url){
+  if (!libLoadPromises[url]){
+    libLoadPromises[url] = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = url;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('โหลดไลบรารีสำรองไม่สำเร็จ: ' + url));
+      document.head.appendChild(s);
+    });
+  }
+  return libLoadPromises[url];
+}
+// Ensures window[globalName] exists, trying a fallback CDN once if missing.
+// Returns true if the library is (now) available, false otherwise.
+async function ensureLib(globalName){
+  if (typeof window[globalName] !== 'undefined') return true;
+  const fallbackUrl = LIB_FALLBACK_CDNS[globalName];
+  if (fallbackUrl){
+    try{ await loadFallbackScript(fallbackUrl); } catch(e){ /* checked below */ }
+  }
+  return typeof window[globalName] !== 'undefined';
+}
+function showLibWarning(containerEl, message){
+  if (!containerEl) return;
+  containerEl.innerHTML = '<div style="padding:12px;font-size:12.5px;color:#c0392b;text-align:center;">' + escapeHtml(message) + '</div>';
+}
+
 function rowsToObjects(payload){
   const cols = payload.cols;
   return payload.rows.map(r => {
@@ -857,12 +900,34 @@ function attachFilterEvents(){
 }
 
 /* ---------------- Render orchestrator ---------------- */
-function renderAll(){
-  renderGauge();
-  renderKPIs();
-  renderCharts();
-  renderMap();
-  renderTable();
+async function renderAll(){
+  try{ renderGauge(); } catch(e){ console.error('renderGauge failed', e); }
+  try{ renderKPIs(); } catch(e){ console.error('renderKPIs failed', e); }
+  await renderChartsSafe();
+  await renderMapSafe();
+  try{ renderTable(); } catch(e){ console.error('renderTable failed', e); }
+}
+
+async function renderChartsSafe(){
+  const ok = await ensureLib('Chart');
+  if (!ok){
+    ['chartType','chartStatus','chartYear','chartDistrict','chartSize','chartSewer','chartProvince'].forEach(id => {
+      const el = document.getElementById(id);
+      showLibWarning(el && el.parentElement, 'โหลดไลบรารีกราฟ (Chart.js) ไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองรีเฟรชหน้านี้');
+    });
+    return;
+  }
+  try{ renderCharts(); } catch(e){ console.error('renderCharts failed', e); }
+}
+
+async function renderMapSafe(){
+  const ok = await ensureLib('L');
+  if (!ok){
+    const el = document.getElementById('map');
+    showLibWarning(el, 'โหลดไลบรารีแผนที่ (Leaflet) ไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองรีเฟรชหน้านี้');
+    return;
+  }
+  try{ renderMap(); } catch(e){ console.error('renderMap failed', e); }
 }
 
 /* ---------------- Gauge ---------------- */
@@ -1055,7 +1120,7 @@ function renderCharts(){
     options: baseOptions({ plugins:{legend:{display:false}}, scales:{ x:{grid:{display:false}}, y:{grid:{color:c.line}} } })
   });
 }
-function refreshChartThemeColors(){ if(FILTERED.length || ALL.length) renderCharts(); }
+function refreshChartThemeColors(){ if(FILTERED.length || ALL.length) renderChartsSafe(); }
 
 /* ---------------- Map ---------------- */
 function initMap(){
@@ -1299,6 +1364,7 @@ function extractGid(url){
   return m ? m[1] : null;
 }
 async function fetchPublicSheetRows(url){
+  if (!(await ensureLib('XLSX'))) throw new Error('โหลดไลบรารีอ่านไฟล์ตาราง (XLSX) ไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่');
   const id = extractSheetId(url);
   if (!id) throw new Error('ไม่พบรหัสสเปรดชีตในลิงก์ที่วาง กรุณาวางลิงก์ Google Sheet ที่สมบูรณ์');
   const gid = extractGid(url);
@@ -1422,6 +1488,7 @@ async function onPickerPicked(data){
 }
 
 async function fetchDriveFileRows(fileId, mimeType){
+  if (!(await ensureLib('XLSX'))) throw new Error('โหลดไลบรารีอ่านไฟล์ตาราง (XLSX) ไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่');
   const authHeader = { Authorization: 'Bearer ' + accessToken };
   if (mimeType === 'application/vnd.google-apps.spreadsheet'){
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`, { headers: authHeader });
