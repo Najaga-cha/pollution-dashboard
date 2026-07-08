@@ -1342,6 +1342,10 @@ function initChartTabs(){
 let lastSource = null; // { type:'drive', fileId, mimeType, name } | { type:'sheet', url }
 
 // -- Persist OAuth Client ID + last data source in this browser (localStorage) --
+// -- Default data source baked into this file: any device opening this HTML
+// will auto-load from this public Google Sheet (no login, no upload needed) --
+const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1WWFLt5HF9wrMfese3sTq0WOQi5OI2Xb7EbDDYKvUi5c/edit?usp=sharing';
+
 const LS_CLIENT_ID = 'psd_gsheet_client_id';
 const LS_LAST_SOURCE = 'psd_gsheet_last_source';
 function saveClientId(id){ try{ localStorage.setItem(LS_CLIENT_ID, id || ''); }catch(e){} }
@@ -1371,18 +1375,67 @@ function extractGid(url){
   const m = String(url).match(/[?#&]gid=(\d+)/);
   return m ? m[1] : null;
 }
+// JSONP loader: Google's gviz endpoint does not reliably send
+// Access-Control-Allow-Origin headers, so a plain fetch() from any
+// domain other than docs.google.com itself is often blocked by the
+// browser with a generic "Failed to fetch" error even though the
+// sheet is perfectly public and reachable by direct navigation.
+// Loading it as a <script> tag (JSONP) sidesteps CORS entirely,
+// which is the same technique Google's own charting library uses.
+function loadJsonp(buildUrl, timeoutMs){
+  return new Promise((resolve, reject) => {
+    const cbName = '__gsheetCb_' + Date.now() + '_' + Math.floor(Math.random()*1e6);
+    const script = document.createElement('script');
+    let settled = false;
+    function cleanup(){
+      try{ delete window[cbName]; }catch(e){ window[cbName] = undefined; }
+      if (script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timer);
+    }
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('หมดเวลาเชื่อมต่อ Google Sheet กรุณาตรวจสอบว่าลิงก์ถูกต้องและชีตแชร์เป็น "ทุกคนที่มีลิงก์ - ดูได้" แล้วลองใหม่'));
+    }, timeoutMs || 12000);
+    window[cbName] = function(data){
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(data);
+    };
+    script.onerror = function(){
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('โหลดข้อมูลจาก Google ไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต หรือว่าลิงก์ชีตถูกต้องหรือไม่'));
+    };
+    script.src = buildUrl(cbName);
+    document.head.appendChild(script);
+  });
+}
 async function fetchPublicSheetRows(url){
-  if (!(await ensureLib('XLSX'))) throw new Error('โหลดไลบรารีอ่านไฟล์ตาราง (XLSX) ไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่');
   const id = extractSheetId(url);
   if (!id) throw new Error('ไม่พบรหัสสเปรดชีตในลิงก์ที่วาง กรุณาวางลิงก์ Google Sheet ที่สมบูรณ์');
   const gid = extractGid(url);
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv` + (gid ? `&gid=${gid}` : '');
-  const res = await fetch(csvUrl);
-  if (!res.ok) throw new Error('ดึงข้อมูลไม่สำเร็จ (HTTP '+res.status+') ตรวจสอบว่าชีตแชร์เป็น "ทุกคนที่มีลิงก์ - ดูได้" แล้วหรือยัง');
-  const csvText = await res.text();
-  if (/^<!DOCTYPE html/i.test(csvText.trim())) throw new Error('ชีตนี้ยังไม่ได้เปิดสิทธิ์ให้ดูแบบสาธารณะ กรุณาตั้งค่าการแชร์เป็น "ทุกคนที่มีลิงก์ - ดูได้"');
-  const wb = XLSX.read(csvText, {type:'string'});
-  const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null});
+  let data;
+  try{
+    data = await loadJsonp(cb => `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:json;responseHandler:${cb}` + (gid ? `&gid=${gid}` : ''));
+  } catch(e){
+    throw new Error((e && e.message) || 'ดึงข้อมูลไม่สำเร็จ');
+  }
+  if (!data || !data.table || !Array.isArray(data.table.rows)) {
+    throw new Error('ชีตนี้ยังไม่ได้เปิดสิทธิ์ให้ดูแบบสาธารณะ กรุณาตั้งค่าการแชร์เป็น "ทุกคนที่มีลิงก์ - ดูได้"');
+  }
+  const cols = data.table.cols.map((c,i) => (c && c.label && String(c.label).trim()) || (c && c.id) || ('col'+i));
+  const json = data.table.rows.map(r => {
+    const obj = {};
+    cols.forEach((colName, i) => {
+      const cell = r && r.c && r.c[i];
+      obj[colName] = cell ? (cell.v !== undefined && cell.v !== null ? cell.v : (cell.f !== undefined ? cell.f : null)) : null;
+    });
+    return obj;
+  });
   return json.map(o => mapUploadedRow(o)).filter(Boolean);
 }
 async function loadFromPublicSheet(url, isRefresh){
@@ -1568,6 +1621,12 @@ function initGSheet(){
   } else if (saved && saved.type === 'drive' && saved.fileId){
     lastSource = saved;
     showActiveSourceRow('แหล่งข้อมูลล่าสุด: ' + saved.name + ' (Drive) · กด "เข้าสู่ระบบ Google" อีกครั้งเพื่อรีเฟรช (ต้องยืนยันตัวตนใหม่ทุกครั้งที่เปิดหน้านี้ตามข้อกำหนดความปลอดภัยของ Google)');
+  } else if (DEFAULT_SHEET_URL) {
+    // No per-browser preference yet (e.g. first time on this device) →
+    // auto-load the sheet baked into this file so data shows up with zero clicks.
+    document.getElementById('gsheetUrl').value = DEFAULT_SHEET_URL;
+    showActiveSourceRow('แหล่งข้อมูล: ลิงก์ Google Sheet สาธารณะ (ค่าเริ่มต้นของไฟล์นี้) · กำลังโหลด...');
+    loadFromPublicSheet(DEFAULT_SHEET_URL, true);
   }
 }
 
