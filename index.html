@@ -1247,9 +1247,26 @@ function themeColors(){
   };
 }
 
-function truncateLabel(str, max){
-  str = String(str == null ? '' : str);
-  return str.length > max ? str.slice(0, max - 1).trimEnd() + '…' : str;
+function fitTextToWidth(text, maxPx, fontSizePx){
+  text = String(text == null ? '' : text).trim();
+  if (!text) return text;
+  try{
+    if (!fitTextToWidth._ctx){
+      fitTextToWidth._ctx = document.createElement('canvas').getContext('2d');
+    }
+    const ctx = fitTextToWidth._ctx;
+    ctx.font = fontSizePx + "px 'IBM Plex Sans Thai','Noto Sans Thai',sans-serif";
+    if (ctx.measureText(text).width <= maxPx) return text;
+    let lo = 0, hi = text.length;
+    while (lo < hi){
+      const mid = Math.ceil((lo + hi) / 2);
+      if (ctx.measureText(text.slice(0, mid) + '…').width <= maxPx) lo = mid; else hi = mid - 1;
+    }
+    return lo > 0 ? text.slice(0, lo) + '…' : '…';
+  } catch(e){
+    const max = Math.max(3, Math.floor(maxPx / (fontSizePx * 0.62)));
+    return text.length > max ? text.slice(0, max - 1) + '…' : text;
+  }
 }
 
 function baseOptions(extra){
@@ -1270,8 +1287,22 @@ function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete chart
 function renderCharts(){
   const c = themeColors();
   const mobile = isMobileLayout();
-  const yTicks = (max) => ({ autoSkip:false, font:{size: mobile?9.5:11}, callback:function(val){ return truncateLabel(this.getLabelForValue(val), max); } });
-  const xTicks = (max) => ({ font:{size: mobile?9.5:11}, callback:function(val){ return truncateLabel(this.getLabelForValue(val), max); } });
+  // Reserve a fixed, guaranteed-to-fit column for horizontal-bar category
+  // labels (Chart.js otherwise sizes this from the raw label text, which on
+  // a narrow phone screen can leave almost no room and clip the text).
+  const catAxisY = (widthPx) => {
+    const fontSize = mobile ? 9.5 : 11;
+    return {
+      grid:{display:false},
+      afterFit:(scale)=>{ scale.width = widthPx; },
+      ticks:{ autoSkip:false, font:{size:fontSize},
+        callback:function(val){ return fitTextToWidth(this.getLabelForValue(val), widthPx - 10, fontSize); } }
+    };
+  };
+  const catAxisX = (perLabelPx) => {
+    const fontSize = mobile ? 9.5 : 11;
+    return { font:{size:fontSize}, callback:function(val){ return fitTextToWidth(this.getLabelForValue(val), perLabelPx, fontSize); } };
+  };
 
   // --- Type stacked bar (top10 by count) ---
   const typeMap = {};
@@ -1285,7 +1316,7 @@ function renderCharts(){
         {label:'ปฏิบัติตาม', data: typeTop.map(t=>t[2].ok), backgroundColor:c.brand, borderRadius:4, stack:'s'},
         {label:'ไม่ปฏิบัติตาม', data: typeTop.map(t=>t[2].bad), backgroundColor:c.warn, borderRadius:4, stack:'s'},
       ]},
-    options: baseOptions(Object.assign({ indexAxis:'y', scales:{ x:{stacked:true, grid:{color:c.line}}, y:{stacked:true, grid:{display:false}, ticks:yTicks(mobile?13:22)} } },
+    options: baseOptions(Object.assign({ indexAxis:'y', scales:{ x:{stacked:true, grid:{color:c.line}}, y:{stacked:true, ...catAxisY(mobile?104:180)} } },
       chartClickOptions((evt, elements)=>{
         if (!elements.length) return;
         const el = elements[0];
@@ -1345,7 +1376,7 @@ function renderCharts(){
   charts.district = new Chart(document.getElementById('chartDistrict'), {
     type:'bar',
     data:{ labels: distTop.map(x=>x.d+' ('+x.p+')'), datasets:[{ label:'ไม่ปฏิบัติตามกฎหมาย', data: distTop.map(x=>x.count), backgroundColor:c.warn, borderRadius:4 }]},
-    options: baseOptions(Object.assign({ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{grid:{color:c.line}}, y:{grid:{display:false}, ticks:yTicks(mobile?15:28)} } },
+    options: baseOptions(Object.assign({ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{grid:{color:c.line}}, y:catAxisY(mobile?120:200) } },
       chartClickOptions((evt, elements)=>{
         if (!elements.length) return;
         const item = distTop[elements[0].index];
@@ -1392,8 +1423,8 @@ function renderCharts(){
   const provTop = Object.entries(provMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
   destroyChart('province');
   const provScales = mobile
-    ? { x:{grid:{color:c.line}, ticks:{font:{size:9.5}}}, y:{grid:{display:false}, ticks:yTicks(14)} }
-    : { x:{grid:{display:false}, ticks:xTicks(16)}, y:{grid:{color:c.line}} };
+    ? { x:{grid:{color:c.line}, ticks:{font:{size:9.5}}}, y:catAxisY(108) }
+    : { x:{grid:{display:false}, ticks:catAxisX(70)}, y:{grid:{color:c.line}} };
   charts.province = new Chart(document.getElementById('chartProvince'), {
     type:'bar',
     data:{ labels: provTop.map(p=>p[0]), datasets:[{ label:'จำนวนแห่ง', data: provTop.map(p=>p[1]), backgroundColor:c.brand, borderRadius:4 }]},
