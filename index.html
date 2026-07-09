@@ -1896,6 +1896,31 @@ function initHeaderHeightSync(){
 }
 
 /* ---------------- Init ---------------- */
+/* ---------------- Font-ready guard (fixes iOS Safari label clipping) ----------------
+   Canvas text measurement/rendering uses whatever font is actually loaded at
+   draw time. On iOS Safari the "IBM Plex Sans Thai" web font can still be
+   downloading when the first chart paints, so both Chart.js and our pixel-
+   accurate label-fitting logic measure text using a fallback font instead —
+   the metrics don't match the real typeface, and the chart labels end up
+   clipped far more aggressively than intended. Waiting for the font (with a
+   short timeout safety net so a slow network never blocks first paint for
+   long) avoids the mismatch entirely instead of just patching it after. */
+function withFontsReady(cb, timeoutMs){
+  timeoutMs = timeoutMs || 400;
+  let done = false;
+  const finish = () => { if (done) return; done = true; cb(); };
+  if (window.document && document.fonts && document.fonts.ready){
+    const specs = ["400 11px 'IBM Plex Sans Thai'", "500 11px 'IBM Plex Sans Thai'", "600 11px 'IBM Plex Sans Thai'"];
+    Promise.all(specs.map(s => { try{ return document.fonts.load(s); }catch(e){ return Promise.resolve(); } }))
+      .then(()=> document.fonts.ready)
+      .then(finish)
+      .catch(finish);
+    setTimeout(finish, timeoutMs);
+  } else {
+    finish();
+  }
+}
+
 function init(){
   initTheme();
   initMobilePreview();
@@ -1909,8 +1934,15 @@ function init(){
   initChartTabs();
   initChartDetailModal();
   initUpload();
-  loadData(EMBEDDED_DATA, 'กำลังเชื่อมต่อ Google Sheet...');
-  initGsheetConnect(); // loads all data live from the connected Google Sheet
+  withFontsReady(() => {
+    loadData(EMBEDDED_DATA, 'กำลังเชื่อมต่อ Google Sheet...');
+    initGsheetConnect(); // loads all data live from the connected Google Sheet
+  });
+  // Extra safety net: if the timeout fallback fired before the font actually
+  // finished loading, re-render once it truly is ready so labels self-correct.
+  if (window.document && document.fonts && document.fonts.ready){
+    document.fonts.ready.then(() => { if (Object.keys(charts).length) renderChartsSafe(); }).catch(()=>{});
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
