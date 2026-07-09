@@ -476,20 +476,25 @@ footer a{text-decoration:underline; text-underline-offset:2px;}
   .filter-title-row{align-items:flex-start;}
   .map-head{flex-direction:column; align-items:flex-start;}
   #mapResetBtn{align-self:flex-end;}
+  .chart-canvas-wrap{height:270px;}
+  .chart-canvas-wrap.tall{height:320px;}
+  .charts-grid-2 .chart-canvas-wrap{height:230px;}
 }
 
-/* ---------- Mobile-preview (phone) mode ----------
-   Simulates the phone layout inside a bezel, regardless of the
-   actual browser window width, by re-applying the same rules the
-   two @media blocks above already use for narrow screens. */
-body.mobile-preview{
+/* ---------- Mobile mode ----------
+   .mobile-preview = mobile-optimized layout (applied automatically on real
+   phones, or manually via the toggle button).
+   .mobile-preview-framed = extra phone-bezel "device frame" visuals, only
+   added when previewing mobile mode on a wide (desktop) screen — a real
+   phone screen doesn't need a fake bezel drawn on top of its own screen. */
+body.mobile-preview-framed{
   background:var(--bg-sunken);
   padding:28px 12px;
   display:flex;
   justify-content:center;
   min-height:100vh;
 }
-body.mobile-preview #appFrame{
+body.mobile-preview-framed #appFrame{
   width:100%;
   max-width:412px;
   background:var(--bg);
@@ -499,7 +504,7 @@ body.mobile-preview #appFrame{
   overflow:hidden;
   position:relative;
 }
-body.mobile-preview #appFrame::before{
+body.mobile-preview-framed #appFrame::before{
   content:''; position:absolute; top:10px; left:50%; transform:translateX(-50%);
   width:84px; height:5px; border-radius:100px; background:var(--line-strong); z-index:120;
 }
@@ -523,6 +528,13 @@ body.mobile-preview .pulse-chip{padding:5px 8px; font-size:10px;}
 body.mobile-preview #gsheetToggleBtn span:not(.gsheet-live-dot){display:none;}
 body.mobile-preview .gsheet-panel{width:calc(100vw - 60px); max-width:340px; right:-10px;}
 body.mobile-preview .table-scroll{max-height:340px;}
+/* Give charts more vertical breathing room on mobile so bar/tick labels
+   have space and don't crowd or overlap each other. Paired with JS-side
+   label truncation + axis-flip in renderCharts(). */
+body.mobile-preview .chart-card{padding:14px 14px 8px;}
+body.mobile-preview .chart-canvas-wrap{height:270px;}
+body.mobile-preview .chart-canvas-wrap.tall{height:320px;}
+body.mobile-preview .charts-grid-2 .chart-canvas-wrap{height:230px;}
 #mobileToggle.is-on{background:var(--brand); border-color:var(--brand); color:#fff;}
 </style>
 </head>
@@ -938,24 +950,59 @@ function setTheme(dark){
 
 /* ---------------- Mobile preview (phone) mode ---------------- */
 const LS_MOBILE_PREVIEW = 'pollution_dashboard_mobile_preview';
+
+function isPhoneDevice(){
+  const ua = navigator.userAgent || '';
+  const uaMobile = /Android|iPhone|iPod|IEMobile|BlackBerry|Opera Mini/i.test(ua);
+  const coarsePointer = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+  const narrowScreen = window.innerWidth <= 700;
+  return uaMobile || (coarsePointer && narrowScreen);
+}
+
+function isMobileLayout(){
+  return document.body.classList.contains('mobile-preview');
+}
+
 function initMobilePreview(){
   const btn = document.getElementById('mobileToggle');
-  let on = false;
-  try{ on = localStorage.getItem(LS_MOBILE_PREVIEW) === '1'; }catch(e){}
-  setMobilePreview(on);
+  let saved = null;
+  try{ saved = localStorage.getItem(LS_MOBILE_PREVIEW); }catch(e){}
+  // If the user has never chosen explicitly, auto-switch to phone mode
+  // when the site detects it's actually being opened on a phone.
+  const on = saved === null ? isPhoneDevice() : saved === '1';
+  setMobilePreview(on, { persist: saved !== null });
   btn.addEventListener('click', () => {
-    setMobilePreview(!document.body.classList.contains('mobile-preview'));
+    setMobilePreview(!document.body.classList.contains('mobile-preview'), { persist:true });
+  });
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(updateFramedState, 200);
   });
 }
-function setMobilePreview(on){
+
+function updateFramedState(){
+  const on = document.body.classList.contains('mobile-preview');
+  const isNarrowViewport = window.innerWidth <= 700;
+  document.body.classList.toggle('mobile-preview-framed', on && !isNarrowViewport);
+}
+
+function setMobilePreview(on, opts){
+  opts = opts || {};
   document.body.classList.toggle('mobile-preview', on);
+  updateFramedState();
   const btn = document.getElementById('mobileToggle');
   if (btn){
     btn.classList.toggle('is-on', on);
     btn.title = on ? 'กลับสู่มุมมองปกติ' : 'ดูตัวอย่างโหมดโทรศัพท์';
   }
-  try{ localStorage.setItem(LS_MOBILE_PREVIEW, on ? '1' : '0'); }catch(e){}
+  if (opts.persist){
+    try{ localStorage.setItem(LS_MOBILE_PREVIEW, on ? '1' : '0'); }catch(e){}
+  }
   syncHeaderHeight();
+  // Charts have axis/label settings tuned per layout (see renderCharts) —
+  // re-render so switching modes never leaves overlapping tick labels.
+  if (Object.keys(charts).length) renderChartsSafe();
   setTimeout(()=>{ if (mapInstance) mapInstance.invalidateSize(); }, 260);
 }
 
@@ -1200,13 +1247,20 @@ function themeColors(){
   };
 }
 
+function truncateLabel(str, max){
+  str = String(str == null ? '' : str);
+  return str.length > max ? str.slice(0, max - 1).trimEnd() + '…' : str;
+}
+
 function baseOptions(extra){
   const c = themeColors();
+  const mobile = isMobileLayout();
   Chart.defaults.font.family = "'IBM Plex Sans Thai','Noto Sans Thai',sans-serif";
   Chart.defaults.color = c.inkSoft;
   return Object.assign({
     responsive:true, maintainAspectRatio:false,
-    plugins:{ legend:{ labels:{ color:c.inkSoft, boxWidth:11, font:{size:11} } },
+    layout:{ padding:{ right: mobile?6:2 } },
+    plugins:{ legend:{ labels:{ color:c.inkSoft, boxWidth: mobile?9:11, font:{size: mobile?10.5:11} } },
       tooltip:{ backgroundColor:c.bgElev, titleColor:c.ink, bodyColor:c.inkSoft, borderColor:c.line, borderWidth:1, padding:10, titleFont:{family:"'Chakra Petch'"} } },
   }, extra||{});
 }
@@ -1215,6 +1269,9 @@ function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete chart
 
 function renderCharts(){
   const c = themeColors();
+  const mobile = isMobileLayout();
+  const yTicks = (max) => ({ autoSkip:false, font:{size: mobile?9.5:11}, callback:function(val){ return truncateLabel(this.getLabelForValue(val), max); } });
+  const xTicks = (max) => ({ font:{size: mobile?9.5:11}, callback:function(val){ return truncateLabel(this.getLabelForValue(val), max); } });
 
   // --- Type stacked bar (top10 by count) ---
   const typeMap = {};
@@ -1228,7 +1285,7 @@ function renderCharts(){
         {label:'ปฏิบัติตาม', data: typeTop.map(t=>t[2].ok), backgroundColor:c.brand, borderRadius:4, stack:'s'},
         {label:'ไม่ปฏิบัติตาม', data: typeTop.map(t=>t[2].bad), backgroundColor:c.warn, borderRadius:4, stack:'s'},
       ]},
-    options: baseOptions(Object.assign({ indexAxis:'y', scales:{ x:{stacked:true, grid:{color:c.line}}, y:{stacked:true, grid:{display:false}} } },
+    options: baseOptions(Object.assign({ indexAxis:'y', scales:{ x:{stacked:true, grid:{color:c.line}}, y:{stacked:true, grid:{display:false}, ticks:yTicks(mobile?13:22)} } },
       chartClickOptions((evt, elements)=>{
         if (!elements.length) return;
         const el = elements[0];
@@ -1266,9 +1323,9 @@ function renderCharts(){
         {type:'line', label:'อัตราปฏิบัติตาม (%)', data: years.map(y=>{const t=yearMap[y].ok+yearMap[y].bad; return t? Math.round(yearMap[y].ok/t*1000)/10:0;}), borderColor:c.brand, backgroundColor:c.brand, yAxisID:'y1', tension:.35, pointRadius:3},
       ]},
     options: baseOptions(Object.assign({ scales:{
-      x:{ grid:{display:false} },
-      y:{ position:'left', grid:{color:c.line}, title:{display:true,text:'จำนวน (แห่ง)',color:c.inkSoft,font:{size:10.5}} },
-      y1:{ position:'right', grid:{display:false}, min:0, max:100, title:{display:true,text:'% ปฏิบัติตาม',color:c.inkSoft,font:{size:10.5}} },
+      x:{ grid:{display:false}, ticks:{font:{size: mobile?9.5:11}} },
+      y:{ position:'left', grid:{color:c.line}, title:{display:true,text: mobile?'จำนวน':'จำนวน (แห่ง)',color:c.inkSoft,font:{size: mobile?9.5:10.5}}, ticks:{font:{size: mobile?9.5:11}} },
+      y1:{ position:'right', grid:{display:false}, min:0, max:100, title:{display:true,text: mobile?'%':'% ปฏิบัติตาม',color:c.inkSoft,font:{size: mobile?9.5:10.5}}, ticks:{font:{size: mobile?9.5:11}} },
     }},
     chartClickOptions((evt, elements)=>{
       if (!elements.length) return;
@@ -1288,7 +1345,7 @@ function renderCharts(){
   charts.district = new Chart(document.getElementById('chartDistrict'), {
     type:'bar',
     data:{ labels: distTop.map(x=>x.d+' ('+x.p+')'), datasets:[{ label:'ไม่ปฏิบัติตามกฎหมาย', data: distTop.map(x=>x.count), backgroundColor:c.warn, borderRadius:4 }]},
-    options: baseOptions(Object.assign({ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{grid:{color:c.line}}, y:{grid:{display:false}} } },
+    options: baseOptions(Object.assign({ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{grid:{color:c.line}}, y:{grid:{display:false}, ticks:yTicks(mobile?15:28)} } },
       chartClickOptions((evt, elements)=>{
         if (!elements.length) return;
         const item = distTop[elements[0].index];
@@ -1334,10 +1391,13 @@ function renderCharts(){
   FILTERED.filter(r=>r.p!=='กรุงเทพมหานคร').forEach(r=>{ provMap[r.p]=(provMap[r.p]||0)+1; });
   const provTop = Object.entries(provMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
   destroyChart('province');
+  const provScales = mobile
+    ? { x:{grid:{color:c.line}, ticks:{font:{size:9.5}}}, y:{grid:{display:false}, ticks:yTicks(14)} }
+    : { x:{grid:{display:false}, ticks:xTicks(16)}, y:{grid:{color:c.line}} };
   charts.province = new Chart(document.getElementById('chartProvince'), {
     type:'bar',
     data:{ labels: provTop.map(p=>p[0]), datasets:[{ label:'จำนวนแห่ง', data: provTop.map(p=>p[1]), backgroundColor:c.brand, borderRadius:4 }]},
-    options: baseOptions(Object.assign({ plugins:{legend:{display:false}}, scales:{ x:{grid:{display:false}}, y:{grid:{color:c.line}} } },
+    options: baseOptions(Object.assign({ indexAxis: mobile?'y':'x', plugins:{legend:{display:false}}, scales:provScales },
       chartClickOptions((evt, elements)=>{
         if (!elements.length) return;
         const prov = provTop[elements[0].index][0];
