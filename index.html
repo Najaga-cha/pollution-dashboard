@@ -131,10 +131,12 @@ header.topbar{
 .btn.primary:hover{background:var(--brand-dark);}
 .btn svg{width:15px; height:15px;}
 #fileInput{display:none;}
-.gsheet-wrap{display:none !important;}
 
 /* ---------- Google Sheet connect ---------- */
 .gsheet-wrap{position:relative;}
+.gsheet-live-dot{width:6px; height:6px; border-radius:50%; background:var(--ink-faint); flex-shrink:0;}
+.gsheet-live-dot.on{background:var(--brand); box-shadow:0 0 0 3px var(--brand-soft);}
+.gsheet-panel[hidden]{display:none;}
 .gsheet-panel{
   position:absolute; top:calc(100% + 8px); right:0; width:360px; z-index:60;
   background:var(--bg-elev); border:1px solid var(--line); border-radius:12px;
@@ -478,12 +480,40 @@ footer a{text-decoration:underline; text-underline-offset:2px;}
       <div class="pulse-chip"><span class="pulse-dot"></span><span id="syncLabel">ข้อมูลล่าสุด —</span></div>
       <div class="pulse-chip" id="clockChip">--:--:--</div>
       <div class="gsheet-wrap">
-        <label class="btn primary" for="fileInput" title="อัปโหลดไฟล์ .xlsx/.csv จากเครื่องเพื่ออัปเดตข้อมูล">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/></svg>
-          อัปโหลดไฟล์ข้อมูล (.xlsx/.csv)
-        </label>
-        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden>
-        <div class="gsheet-msg" id="gsheetMsg"></div>
+        <button class="btn primary" id="gsheetToggleBtn" type="button" title="เชื่อมต่อ Google Sheet แบบเรียลไทม์">
+          <span class="gsheet-live-dot" id="gsheetLiveDot"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+          เชื่อมต่อ Google Sheet
+        </button>
+        <div class="gsheet-panel" id="gsheetPanel" hidden>
+          <label for="gsheetUrlInput">ลิงก์ Google Sheet (แบบเปิดสาธารณะ)</label>
+          <input type="text" id="gsheetUrlInput" placeholder="วางลิงก์ https://docs.google.com/spreadsheets/d/...">
+          <div class="gsheet-hint">
+            <div class="gsheet-step">1) เปิดไฟล์ใน Google Sheets → กด <b>Share</b> → เปลี่ยนสิทธิ์เป็น <b>"Anyone with the link" (Viewer)</b></div>
+            <div class="gsheet-step">2) คัดลอกลิงก์จาก address bar (มีรูปแบบ <code>/d/SHEET_ID/edit#gid=0</code>) มาวางด้านบน</div>
+            <div class="gsheet-step">3) ระบบจะดึงข้อมูลจากชีตนี้โดยตรงและรีเฟรชอัตโนมัติ ไม่ต้องอัปโหลดไฟล์ซ้ำอีก</div>
+          </div>
+          <div class="gsheet-actions">
+            <button class="btn primary" id="gsheetConnectBtn" type="button" style="flex:1; justify-content:center;">เชื่อมต่อ &amp; ดึงข้อมูล</button>
+          </div>
+          <div class="gsheet-refresh-row" id="gsheetRefreshRow" hidden>
+            <span id="gsheetRefreshLabel">รีเฟรชอัตโนมัติ: ปิด</span>
+            <span style="display:flex; gap:10px;">
+              <button type="button" id="gsheetRefreshToggleBtn">เปิดรีเฟรชอัตโนมัติ</button>
+              <button type="button" id="gsheetRefreshNowBtn">รีเฟรชตอนนี้</button>
+              <button type="button" id="gsheetDisconnectBtn">ยกเลิกการเชื่อมต่อ</button>
+            </span>
+          </div>
+          <div class="gsheet-msg" id="gsheetMsg"></div>
+          <details class="gsheet-fallback-details">
+            <summary>หรืออัปโหลดไฟล์ .xlsx/.csv จากเครื่องแทน</summary>
+            <label class="btn" for="fileInput" style="width:100%; justify-content:center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/></svg>
+              อัปโหลดไฟล์ข้อมูล (.xlsx/.csv)
+            </label>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden>
+          </details>
+        </div>
       </div>
       <button class="icon-btn" id="themeToggle" title="สลับโหมดมืด/สว่าง">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -1431,14 +1461,174 @@ function setGsheetMsg(text, kind){
   el.className = 'gsheet-msg' + (kind ? ' '+kind : '');
 }
 
-/* ---------------- REMOVED: Google Drive sign-in + picker -----------------
-   The OAuth "เชื่อมต่อ Google Drive" button/panel and its picker flow were
-   removed at the user's request so nothing sits on top of the dashboard and
-   the charts/data are visible immediately using the data embedded in this
-   file (or a locally uploaded .xlsx/.csv). See initUpload() below for the
-   remaining, simpler local-file loading path.
+/* ---------------- Google Sheet live connect ----------------------------
+   No OAuth / API key required. The sheet must be shared as "Anyone with
+   the link" (Viewer) or published to the web. We build a CSV export URL
+   from the pasted link and fetch it directly from the browser, parse it
+   with the same XLSX/CSV pipeline used for uploaded files, and (optionally)
+   poll it on an interval for a real-time-ish connection.
 ----------------------------------------------------------------------- */
-/* ---------------- Upload new data (only remaining data-refresh path) ---------------- */
+const LS_GSHEET = 'pollution_gsheet_config_v1';
+const DEFAULT_GSHEET_URL = 'https://docs.google.com/spreadsheets/d/1WWFLt5HF9wrMfese3sTq0WOQi5OI2Xb7EbDDYKvUi5c/edit?usp=sharing';
+let gsheetConfig = null;
+let gsheetTimer = null;
+
+function saveGsheetConfig(cfg){ try{ localStorage.setItem(LS_GSHEET, JSON.stringify(cfg)); }catch(e){} }
+function loadGsheetConfig(){ try{ const s = localStorage.getItem(LS_GSHEET); return s ? JSON.parse(s) : null; }catch(e){ return null; } }
+function clearGsheetConfig(){ try{ localStorage.removeItem(LS_GSHEET); }catch(e){} }
+
+// Accepts a normal edit link, a "published to web" link, or a bare sheet ID.
+function parseGsheetInput(raw){
+  raw = (raw||'').trim();
+  if (!raw) return null;
+  let gid = '0';
+  const gidMatch = raw.match(/[#&?]gid=([0-9]+)/);
+  if (gidMatch) gid = gidMatch[1];
+  const pubMatch = raw.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
+  if (pubMatch) return { published:true, id:pubMatch[1], gid };
+  const idMatch = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (idMatch) return { published:false, id:idMatch[1], gid };
+  if (/^[a-zA-Z0-9-_]{20,}$/.test(raw)) return { published:false, id:raw, gid };
+  return null;
+}
+
+function buildCsvCandidates(parsed){
+  if (!parsed) return [];
+  if (parsed.published){
+    return [
+      'https://docs.google.com/spreadsheets/d/e/' + parsed.id + '/pub?output=csv&gid=' + parsed.gid,
+      'https://docs.google.com/spreadsheets/d/e/' + parsed.id + '/pub?output=csv',
+    ];
+  }
+  return [
+    'https://docs.google.com/spreadsheets/d/' + parsed.id + '/export?format=csv&gid=' + parsed.gid,
+    'https://docs.google.com/spreadsheets/d/' + parsed.id + '/gviz/tq?tqx=out:csv&gid=' + parsed.gid,
+  ];
+}
+
+async function fetchSheetCsv(parsed){
+  const candidates = buildCsvCandidates(parsed);
+  let lastErr = null;
+  for (const url of candidates){
+    try{
+      const res = await fetch(url, { cache:'no-store' });
+      if (!res.ok){ lastErr = new Error('เซิร์ฟเวอร์ตอบกลับรหัส ' + res.status); continue; }
+      const text = await res.text();
+      if (/^\s*<(!DOCTYPE|html)/i.test(text)){ lastErr = new Error('ชีตนี้ยังไม่เปิดสิทธิ์แบบสาธารณะ (ได้หน้า HTML แทน CSV)'); continue; }
+      return text;
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('ไม่สามารถดึงข้อมูลจากลิงก์นี้ได้');
+}
+
+async function connectGsheet(rawUrl, opts){
+  opts = opts || {};
+  const parsed = parseGsheetInput(rawUrl);
+  if (!parsed){
+    setGsheetMsg('รูปแบบลิงก์ไม่ถูกต้อง กรุณาวางลิงก์ Google Sheet ให้ครบถ้วน', 'err');
+    return false;
+  }
+  if (!opts.silent) setGsheetMsg('กำลังเชื่อมต่อและดึงข้อมูล...', '');
+  try{
+    const libOk = await ensureLib('XLSX');
+    if (!libOk) throw new Error('โหลดไลบรารีอ่านไฟล์ (XLSX) ไม่สำเร็จ');
+    const csvText = await fetchSheetCsv(parsed);
+    const wb = XLSX.read(csvText, { type:'string' });
+    const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:null });
+    const rows = json.map(o => mapUploadedRow(o)).filter(Boolean);
+    if (!rows.length) throw new Error('ดึงข้อมูลสำเร็จ แต่ไม่พบแถวที่ตรงกับรูปแบบคอลัมน์ที่คาดไว้');
+    const payload = { cols:['n','t','c','a','o','s','d','p','w','y','j','r'], rows: rows };
+    loadData(payload, 'Google Sheet (เรียลไทม์) · อัปเดตล่าสุด ' + new Date().toLocaleString('th-TH'));
+    setGsheetMsg('เชื่อมต่อสำเร็จ · ดึงข้อมูล ' + rows.length.toLocaleString('th-TH') + ' รายการ · ' + new Date().toLocaleTimeString('th-TH'), 'ok');
+    const dot = document.getElementById('gsheetLiveDot');
+    if (dot) dot.classList.add('on');
+    const row = document.getElementById('gsheetRefreshRow');
+    if (row) row.hidden = false;
+    return true;
+  } catch(err){
+    setGsheetMsg('เชื่อมต่อไม่สำเร็จ: ' + err.message + ' — ตรวจสอบว่าตั้งค่าแชร์เป็น "Anyone with the link" หรือ Publish to web แล้ว', 'err');
+    const dot = document.getElementById('gsheetLiveDot');
+    if (dot) dot.classList.remove('on');
+    return false;
+  }
+}
+
+function setGsheetAutoRefresh(on, ms){
+  if (gsheetTimer){ clearInterval(gsheetTimer); gsheetTimer = null; }
+  const label = document.getElementById('gsheetRefreshLabel');
+  const btn = document.getElementById('gsheetRefreshToggleBtn');
+  if (on){
+    gsheetTimer = setInterval(()=>{ if (gsheetConfig) connectGsheet(gsheetConfig.raw, {silent:true}); }, ms);
+    if (label) label.textContent = 'รีเฟรชอัตโนมัติ: ทุก ' + Math.round(ms/1000) + ' วินาที';
+    if (btn) btn.textContent = 'ปิดรีเฟรชอัตโนมัติ';
+  } else {
+    if (label) label.textContent = 'รีเฟรชอัตโนมัติ: ปิด';
+    if (btn) btn.textContent = 'เปิดรีเฟรชอัตโนมัติ';
+  }
+  if (gsheetConfig){ gsheetConfig.autoRefresh = on; gsheetConfig.refreshMs = ms; saveGsheetConfig(gsheetConfig); }
+}
+
+function initGsheetConnect(){
+  const toggleBtn = document.getElementById('gsheetToggleBtn');
+  const panel = document.getElementById('gsheetPanel');
+  const urlInput = document.getElementById('gsheetUrlInput');
+  const connectBtn = document.getElementById('gsheetConnectBtn');
+  const refreshToggleBtn = document.getElementById('gsheetRefreshToggleBtn');
+  const refreshNowBtn = document.getElementById('gsheetRefreshNowBtn');
+  const disconnectBtn = document.getElementById('gsheetDisconnectBtn');
+  const REFRESH_MS = 60000; // poll every 60s while auto-refresh is on
+
+  toggleBtn.addEventListener('click', ()=>{ panel.hidden = !panel.hidden; });
+  document.addEventListener('click', (e)=>{
+    if (!panel.hidden && !panel.contains(e.target) && !toggleBtn.contains(e.target)) panel.hidden = true;
+  });
+
+  connectBtn.addEventListener('click', async ()=>{
+    const raw = urlInput.value.trim();
+    if (!raw){ setGsheetMsg('กรุณาวางลิงก์ Google Sheet ก่อน', 'err'); return; }
+    const success = await connectGsheet(raw);
+    if (success){
+      gsheetConfig = { raw, autoRefresh:false, refreshMs:REFRESH_MS };
+      saveGsheetConfig(gsheetConfig);
+    }
+  });
+
+  refreshToggleBtn.addEventListener('click', ()=>{
+    if (!gsheetConfig) return;
+    setGsheetAutoRefresh(!gsheetConfig.autoRefresh, gsheetConfig.refreshMs || REFRESH_MS);
+  });
+  refreshNowBtn.addEventListener('click', ()=>{ if (gsheetConfig) connectGsheet(gsheetConfig.raw); });
+  disconnectBtn.addEventListener('click', ()=>{
+    setGsheetAutoRefresh(false, REFRESH_MS);
+    gsheetConfig = null;
+    clearGsheetConfig();
+    document.getElementById('gsheetRefreshRow').hidden = true;
+    document.getElementById('gsheetLiveDot').classList.remove('on');
+    setGsheetMsg('ยกเลิกการเชื่อมต่อแล้ว กลับไปใช้ข้อมูลที่ฝังในไฟล์', '');
+    loadData(EMBEDDED_DATA, 'ไฟล์ต้นฉบับที่ฝังในแดชบอร์ด · ' + EMBEDDED_DATA.rows.length.toLocaleString('th-TH') + ' รายการ');
+  });
+
+  const saved = loadGsheetConfig();
+  if (saved && saved.raw){
+    urlInput.value = saved.raw;
+    gsheetConfig = saved;
+    connectGsheet(saved.raw, { silent:true }).then(ok=>{
+      if (ok && saved.autoRefresh) setGsheetAutoRefresh(true, saved.refreshMs || REFRESH_MS);
+    });
+  } else if (DEFAULT_GSHEET_URL){
+    // First run: connect automatically to the default sheet, no click needed.
+    urlInput.value = DEFAULT_GSHEET_URL;
+    gsheetConfig = { raw: DEFAULT_GSHEET_URL, autoRefresh:true, refreshMs:REFRESH_MS };
+    connectGsheet(DEFAULT_GSHEET_URL, { silent:true }).then(ok=>{
+      if (ok){
+        saveGsheetConfig(gsheetConfig);
+        setGsheetAutoRefresh(true, REFRESH_MS);
+      }
+    });
+  }
+}
+
+/* ---------------- Upload new data (fallback path inside the panel) ---------------- */
 function initUpload(){
   const input = document.getElementById('fileInput');
   input.addEventListener('change', (e)=>{
@@ -1507,6 +1697,7 @@ function init(){
   aiKeyInput.addEventListener('blur', ()=> saveAiKey(aiKeyInput.value.trim()));
   initUpload();
   loadData(EMBEDDED_DATA, 'ไฟล์ต้นฉบับที่ฝังในแดชบอร์ด (บันทึกล่าสุด 7 ก.ค. 2569) · ' + EMBEDDED_DATA.rows.length.toLocaleString('th-TH') + ' รายการ');
+  initGsheetConnect(); // will silently override with a live sheet if one was connected previously
 }
 
 document.addEventListener('DOMContentLoaded', init);
