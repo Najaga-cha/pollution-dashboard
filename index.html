@@ -476,8 +476,8 @@ footer a{text-decoration:underline; text-underline-offset:2px;}
   .filter-title-row{align-items:flex-start;}
   .map-head{flex-direction:column; align-items:flex-start;}
   #mapResetBtn{align-self:flex-end;}
-  .chart-canvas-wrap{height:270px;}
-  .chart-canvas-wrap.tall{height:320px;}
+  .chart-canvas-wrap{height:300px;}
+  .chart-canvas-wrap.tall{height:360px;}
   .charts-grid-2 .chart-canvas-wrap{height:230px;}
 }
 
@@ -532,8 +532,8 @@ body.mobile-preview .table-scroll{max-height:340px;}
    have space and don't crowd or overlap each other. Paired with JS-side
    label truncation + axis-flip in renderCharts(). */
 body.mobile-preview .chart-card{padding:14px 14px 8px;}
-body.mobile-preview .chart-canvas-wrap{height:270px;}
-body.mobile-preview .chart-canvas-wrap.tall{height:320px;}
+body.mobile-preview .chart-canvas-wrap{height:300px;}
+body.mobile-preview .chart-canvas-wrap.tall{height:360px;}
 body.mobile-preview .charts-grid-2 .chart-canvas-wrap{height:230px;}
 #mobileToggle.is-on{background:var(--brand); border-color:var(--brand); color:#fff;}
 </style>
@@ -1247,9 +1247,20 @@ function themeColors(){
   };
 }
 
+// Conservative fallback: how many characters "should" fit at this pixel
+// budget, assuming a normal Thai sans-serif. Used as a floor so that if the
+// canvas font hasn't actually loaded yet (measureText then reports glyph
+// widths from whatever substitute font the browser is using, which can be
+// far wider than the real typeface) we never truncate down to something
+// unreadably short like 1-2 characters.
+function _minCharsForWidth(maxPx, fontSizePx){
+  return Math.max(3, Math.floor(maxPx / (fontSizePx * 0.62)));
+}
+
 function fitTextToWidth(text, maxPx, fontSizePx){
   text = String(text == null ? '' : text).trim();
   if (!text) return text;
+  const floorChars = Math.min(text.length, _minCharsForWidth(maxPx, fontSizePx));
   try{
     if (!fitTextToWidth._ctx){
       fitTextToWidth._ctx = document.createElement('canvas').getContext('2d');
@@ -1262,11 +1273,69 @@ function fitTextToWidth(text, maxPx, fontSizePx){
       const mid = Math.ceil((lo + hi) / 2);
       if (ctx.measureText(text.slice(0, mid) + '…').width <= maxPx) lo = mid; else hi = mid - 1;
     }
+    if (lo < floorChars) lo = floorChars; // guard against a mis-loaded font over-estimating width
     return lo > 0 ? text.slice(0, lo) + '…' : '…';
   } catch(e){
-    const max = Math.max(3, Math.floor(maxPx / (fontSizePx * 0.62)));
+    const max = Math.max(floorChars, 3);
     return text.length > max ? text.slice(0, max - 1) + '…' : text;
   }
+}
+
+// Same idea as fitTextToWidth but wraps onto up to `maxLines` lines instead
+// of cutting straight to an ellipsis after the first line. Returning an
+// array from a Chart.js tick callback renders as a multi-line label, so
+// long Thai category names (which don't have spaces to break on) stay
+// legible instead of collapsing to 2-3 characters.
+function fitTextToLines(text, maxPx, fontSizePx, maxLines){
+  maxLines = maxLines || 2;
+  text = String(text == null ? '' : text).trim();
+  if (!text) return [''];
+  let ctx;
+  try{
+    if (!fitTextToWidth._ctx){
+      fitTextToWidth._ctx = document.createElement('canvas').getContext('2d');
+    }
+    ctx = fitTextToWidth._ctx;
+    ctx.font = fontSizePx + "px 'IBM Plex Sans Thai','Noto Sans Thai',sans-serif";
+  } catch(e){ ctx = null; }
+  const floorChars = Math.min(text.length, _minCharsForWidth(maxPx, fontSizePx));
+
+  if (!ctx){
+    const max = Math.max(floorChars, 3) * maxLines;
+    return text.length > max ? [text.slice(0, max - 1) + '…'] : [text];
+  }
+  if (ctx.measureText(text).width <= maxPx) return [text];
+
+  const lines = [];
+  let remaining = text;
+  for (let i = 0; i < maxLines && remaining; i++){
+    const isLast = i === maxLines - 1;
+    if (ctx.measureText(remaining).width <= maxPx){
+      lines.push(remaining);
+      remaining = '';
+      break;
+    }
+    if (!isLast){
+      let lo = 1, hi = remaining.length;
+      while (lo < hi){
+        const mid = Math.ceil((lo + hi) / 2);
+        if (ctx.measureText(remaining.slice(0, mid)).width <= maxPx) lo = mid; else hi = mid - 1;
+      }
+      if (lo < floorChars) lo = Math.min(floorChars, remaining.length);
+      lines.push(remaining.slice(0, lo));
+      remaining = remaining.slice(lo);
+    } else {
+      let lo = 1, hi = remaining.length;
+      while (lo < hi){
+        const mid = Math.ceil((lo + hi) / 2);
+        if (ctx.measureText(remaining.slice(0, mid) + '…').width <= maxPx) lo = mid; else hi = mid - 1;
+      }
+      if (lo < floorChars) lo = Math.min(floorChars, remaining.length);
+      lines.push(lo < remaining.length ? remaining.slice(0, lo) + '…' : remaining.slice(0, lo));
+      remaining = '';
+    }
+  }
+  return lines.length ? lines : [text];
 }
 
 function baseOptions(extra){
@@ -1296,7 +1365,7 @@ function renderCharts(){
       grid:{display:false},
       afterFit:(scale)=>{ scale.width = widthPx; },
       ticks:{ autoSkip:false, font:{size:fontSize},
-        callback:function(val){ return fitTextToWidth(this.getLabelForValue(val), widthPx - 10, fontSize); } }
+        callback:function(val){ return fitTextToLines(this.getLabelForValue(val), widthPx - 10, fontSize, 2); } }
     };
   };
   const catAxisX = (perLabelPx) => {
@@ -1316,7 +1385,7 @@ function renderCharts(){
         {label:'ปฏิบัติตาม', data: typeTop.map(t=>t[2].ok), backgroundColor:c.brand, borderRadius:4, stack:'s'},
         {label:'ไม่ปฏิบัติตาม', data: typeTop.map(t=>t[2].bad), backgroundColor:c.warn, borderRadius:4, stack:'s'},
       ]},
-    options: baseOptions(Object.assign({ indexAxis:'y', scales:{ x:{stacked:true, grid:{color:c.line}}, y:{stacked:true, ...catAxisY(mobile?104:180)} } },
+    options: baseOptions(Object.assign({ indexAxis:'y', scales:{ x:{stacked:true, grid:{color:c.line}}, y:{stacked:true, ...catAxisY(mobile?128:190)} } },
       chartClickOptions((evt, elements)=>{
         if (!elements.length) return;
         const el = elements[0];
@@ -1376,7 +1445,7 @@ function renderCharts(){
   charts.district = new Chart(document.getElementById('chartDistrict'), {
     type:'bar',
     data:{ labels: distTop.map(x=>x.d+' ('+x.p+')'), datasets:[{ label:'ไม่ปฏิบัติตามกฎหมาย', data: distTop.map(x=>x.count), backgroundColor:c.warn, borderRadius:4 }]},
-    options: baseOptions(Object.assign({ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{grid:{color:c.line}}, y:catAxisY(mobile?120:200) } },
+    options: baseOptions(Object.assign({ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{grid:{color:c.line}}, y:catAxisY(mobile?134:210) } },
       chartClickOptions((evt, elements)=>{
         if (!elements.length) return;
         const item = distTop[elements[0].index];
@@ -1423,7 +1492,7 @@ function renderCharts(){
   const provTop = Object.entries(provMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
   destroyChart('province');
   const provScales = mobile
-    ? { x:{grid:{color:c.line}, ticks:{font:{size:9.5}}}, y:catAxisY(108) }
+    ? { x:{grid:{color:c.line}, ticks:{font:{size:9.5}}}, y:catAxisY(126) }
     : { x:{grid:{display:false}, ticks:catAxisX(70)}, y:{grid:{color:c.line}} };
   charts.province = new Chart(document.getElementById('chartProvince'), {
     type:'bar',
@@ -1940,9 +2009,19 @@ function init(){
   });
   // Extra safety net: if the timeout fallback fired before the font actually
   // finished loading, re-render once it truly is ready so labels self-correct.
+  // iOS Safari's document.fonts.ready has historically resolved a touch early
+  // for @font-face fonts pulled in via a <link> (as opposed to the Font
+  // Loading API), so a single fonts.ready re-render isn't fully reliable on
+  // its own — pair it with a couple of delayed re-renders on window 'load'
+  // and shortly after, which self-correct any remaining stale/oversized
+  // label measurements without any visible flicker (Chart.js just redraws).
+  const fixLabelsOnceReady = () => { if (Object.keys(charts).length) renderChartsSafe(); };
   if (window.document && document.fonts && document.fonts.ready){
-    document.fonts.ready.then(() => { if (Object.keys(charts).length) renderChartsSafe(); }).catch(()=>{});
+    document.fonts.ready.then(fixLabelsOnceReady).catch(()=>{});
   }
+  window.addEventListener('load', () => setTimeout(fixLabelsOnceReady, 60));
+  setTimeout(fixLabelsOnceReady, 1200);
+  setTimeout(fixLabelsOnceReady, 2500);
 }
 
 document.addEventListener('DOMContentLoaded', init);
